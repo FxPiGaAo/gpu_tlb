@@ -242,6 +242,12 @@ void shader_core_config::reg_options(class OptionParser * opp)
                    "per-shader L1 texture cache  (READ-ONLY) config "
                    " {<nsets>:<bsize>:<assoc>,<rep>:<wr>:<alloc>:<wr_alloc>,<mshr>:<N>:<merge>,<mq>:<rf>}",
                    "8:128:5,L:R:m:N,F:128:4,128:2");
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////
+    option_parser_register(opp, "-gpgpu_tlb:l1", OPT_CSTR, &m_tlb_config.m_config_string,
+                   "per-shader tlb config "
+                   " {<nsets>:<bsize>:<assoc>,<rep>:<wr>:<alloc>:<wr_alloc>,<mshr>:<N>:<merge>,<mq>} ",
+                   "64:64:2,L:R:f:N,A:2:32,4" );
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////
     option_parser_register(opp, "-gpgpu_const_cache:l1", OPT_CSTR, &m_L1C_config.m_config_string, 
                    "per-shader L1 constant memory cache  (READ-ONLY) config "
                    " {<nsets>:<bsize>:<assoc>,<rep>:<wr>:<alloc>:<wr_alloc>,<mshr>:<N>:<merge>,<mq>} ",

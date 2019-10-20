@@ -1304,6 +1304,9 @@ protected:
    unsigned m_sid;
    unsigned m_tpc;
 
+   ///////////////////////////////////////////////
+   tlb_cache *m_tlb;// tlb cache
+   ///////////////////////////////////////////////
    tex_cache *m_L1T; // texture cache
    read_only_cache *m_L1C; // constant cache
    l1_cache *m_L1D; // data cache

@@ -760,7 +760,10 @@ protected:
     unsigned m_result_fifo_entries;
     unsigned m_data_port_width; //< number of byte the cache can access per cycle 
     enum set_index_function m_set_index_function; // Hash, linear, or custom set index function
-
+    
+    /////////////////////////////////
+    friend class tlb_cache;
+    /////////////////////////////////
     friend class tag_array;
     friend class baseline_cache;
     friend class read_only_cache;
@@ -1267,6 +1270,24 @@ protected:
 
     bandwidth_management m_bandwidth_management; 
 };
+
+///////////////////////////////////////////////////////////
+/// tlb cache
+class tlb_cache : public baseline_cache {
+public:
+    tlb_cache( const char *name, cache_config &config, int core_id, int type_id, mem_fetch_interface *memport, enum mem_fetch_status status )
+    : baseline_cache(name,config,core_id,type_id,memport,status){}
+
+    /// Access cache for read_only_cache: returns RESERVATION_FAIL if request could not be accepted (for any reason)
+    virtual enum cache_request_status access( new_addr_type addr, mem_fetch *mf, unsigned time, std::list<cache_event> &events );
+
+    virtual ~tlb_cache(){}
+
+protected:
+    tlb_cache( const char *name, cache_config &config, int core_id, int type_id, mem_fetch_interface *memport, enum mem_fetch_status status, tag_array* new_tag_array )
+    : baseline_cache(name,config,core_id,type_id,memport,status, new_tag_array){}
+};
+///////////////////////////////////////////////////////////
 
 /// Read only cache
 class read_only_cache : public baseline_cache {

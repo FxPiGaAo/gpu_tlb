@@ -1409,7 +1409,9 @@ struct shader_core_config : public core_config
         assert( !(n_thread_per_shader % warp_size) );
 
         set_pipeline_latency();
-        
+        ////////////////////////////////////////////////////////////////////
+        m_tlb_config.init(m_tlb_config.m_config_string,FuncCachePreferNone);
+        //////////////////////////////////////////////////////////////////// 
 	m_L1I_config.init(m_L1I_config.m_config_string,FuncCachePreferNone);
         m_L1T_config.init(m_L1T_config.m_config_string,FuncCachePreferNone);
         m_L1C_config.init(m_L1C_config.m_config_string,FuncCachePreferNone);
@@ -1442,7 +1444,10 @@ struct shader_core_config : public core_config
     unsigned gpgpu_registers_per_block;
     char* pipeline_widths_string;
     int pipe_widths[N_PIPELINE_STAGES];
-
+    
+    /////////////////////////////////////
+    mutable cache_config m_tlb_config;
+    /////////////////////////////////////
     mutable cache_config m_L1I_config;
     mutable cache_config m_L1T_config;
     mutable cache_config m_L1C_config;

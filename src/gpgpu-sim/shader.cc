@@ -2073,6 +2073,11 @@ void ldst_unit::init( mem_fetch_interface *icnt,
     snprintf(L1T_name, STRSIZE, "L1T_%03d", m_sid);
     snprintf(L1C_name, STRSIZE, "L1C_%03d", m_sid);
     m_L1T = new tex_cache(L1T_name,m_config->m_L1T_config,m_sid,get_shader_texture_cache_id(),icnt,IN_L1T_MISS_QUEUE,IN_SHADER_L1T_ROB);
+    //////////////////////////////////
+    snprintf(tlb_name, STRSIZE, "tlb_%03d", m_sid);
+    char tlb_name[STRSIZE];
+    m_tlb = new tlb_cache(tlb_name,m_config->m_tlb_config,m_sid,get_shader_constant_cache_id(),icnt,IN_L1C_MISS_QUEUE);
+    //////////////////////////////////
     m_L1C = new read_only_cache(L1C_name,m_config->m_L1C_config,m_sid,get_shader_constant_cache_id(),icnt,IN_L1C_MISS_QUEUE);
     m_L1D = NULL;
     m_mem_rc = NO_RC_FAIL;

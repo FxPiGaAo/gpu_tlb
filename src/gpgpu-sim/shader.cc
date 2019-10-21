@@ -2364,15 +2364,32 @@ void ldst_unit::cycle()
 	   		L1_latency_queue_cycle();
    }
 
+/////////////////////////////////////////////////////////////
+   bool tlb_hit = 1;
+/////////////////////////////////////////////////////////////
+
+
+
    warp_inst_t &pipe_reg = *m_dispatch_reg;
    enum mem_stage_stall_type rc_fail = NO_RC_FAIL;
    mem_stage_access_type type;
    bool done = true;
+////////////////////////////////////////////////////////////
+   if(tlb_hit == 1){
+////////////////////////////////////////////////////////////
+
    done &= shared_cycle(pipe_reg, rc_fail, type);
    done &= constant_cycle(pipe_reg, rc_fail, type);
    done &= texture_cycle(pipe_reg, rc_fail, type);
    done &= memory_cycle(pipe_reg, rc_fail, type);
    m_mem_rc = rc_fail;
+
+////////////////////////////////////////////////////////////
+   }
+   else{
+       done = 0;
+   }
+////////////////////////////////////////////////////////////
 
    if (!done) { // log stall types and return
       assert(rc_fail != NO_RC_FAIL);

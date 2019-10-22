@@ -1797,15 +1797,15 @@ tlb_cache::access( new_addr_type addr,
     assert(!mf->get_is_write());
     new_addr_type block_addr = m_config.block_addr(addr);
     unsigned cache_index = (unsigned)-1;
-    enum cache_request_status status = m_tag_array->probe(block_addr,cache_index,mf);
+    enum cache_request_status status = m_tag_array->tlb_probe(block_addr,cache_index,mf);
     enum cache_request_status cache_status = RESERVATION_FAIL;
 
     if ( status == HIT ) {
-        cache_status = m_tag_array->access(block_addr,time,cache_index,mf); // update LRU state
+        cache_status = m_tag_array->tlb_access(block_addr,time,cache_index,mf); // update LRU state
     }else if ( status != RESERVATION_FAIL ) {
         if(!miss_queue_full(0)){
             bool do_miss=false;
-            send_read_request(addr, block_addr, cache_index, mf, time, do_miss, events, true, false);
+            tlb_send_read_request(addr, block_addr, cache_index, mf, time, do_miss, events, true, false);
             if(do_miss)
                 cache_status = MISS;
             else

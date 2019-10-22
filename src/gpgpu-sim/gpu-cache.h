@@ -802,6 +802,13 @@ public:
     enum cache_request_status access( new_addr_type addr, unsigned time, unsigned &idx, mem_fetch* mf );
     enum cache_request_status access( new_addr_type addr, unsigned time, unsigned &idx, bool &wb, evicted_block_info &evicted, mem_fetch* mf );
 
+    /////////////////////////////////////////////////////////////////////////
+    enum cache_request_status tlb_probe( new_addr_type addr, unsigned &idx, mem_fetch* mf, bool probe_mode=false ) const;
+    enum cache_request_status tlb_probe( new_addr_type addr, unsigned &idx, mem_access_sector_mask_t mask, bool probe_mode=false, mem_fetch* mf = NULL ) const;
+    enum cache_request_status tlb_access( new_addr_type addr, unsigned time, unsigned &idx, mem_fetch* mf );
+    enum cache_request_status tlb_access( new_addr_type addr, unsigned time, unsigned &idx, bool &wb, evicted_block_info &evicted, mem_fetch* mf );
+    /////////////////////////////////////////////////////////////////////////
+
     void fill( new_addr_type addr, unsigned time, mem_fetch* mf );
     void fill( unsigned idx, unsigned time, mem_fetch* mf );
     void fill( new_addr_type addr, unsigned time, mem_access_sector_mask_t mask );

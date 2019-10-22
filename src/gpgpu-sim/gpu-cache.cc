@@ -478,6 +478,61 @@ enum cache_request_status tag_array::access( new_addr_type addr, unsigned time, 
     return status;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+enum cache_request_status tag_array::tlb_access( new_addr_type addr, unsigned time, unsigned &idx, mem_fetch* mf)
+{
+    bool wb=false;
+    evicted_block_info evicted;
+    enum cache_request_status result = tlb_access(addr,time,idx,wb,evicted,mf);
+    assert(!wb);
+    return result;
+}
+
+enum cache_request_status tag_array::tlb_access( new_addr_type addr, unsigned time, unsigned &idx, bool &wb, evicted_block_info &evicted, mem_fetch* mf )
+{
+    m_access++;
+    is_used = true;
+    shader_cache_access_log(m_core_id, m_type_id, 0); // log accesses to cache
+    enum cache_request_status status = tlb_probe(addr,idx,mf);
+    switch (status) {
+    case HIT_RESERVED: 
+        m_pending_hit++;
+    case HIT: 
+        m_lines[idx]->set_last_access_time(time, mf->get_access_sector_mask());
+        break;
+    case MISS:
+        m_miss++;
+        shader_cache_access_log(m_core_id, m_type_id, 1); // log cache misses
+        if ( m_config.m_alloc_policy == ON_MISS ) {
+            if( m_lines[idx]->is_modified_line()) {
+                wb = true;
+                evicted.set_info(m_lines[idx]->m_block_addr, m_lines[idx]->get_modified_size());
+            }
+            m_lines[idx]->allocate( m_config.tag(addr), m_config.block_addr(addr), time, mf->get_access_sector_mask());
+        }
+        break;
+    case SECTOR_MISS:
+        assert(m_config.m_cache_type == SECTOR);
+        m_sector_miss++;
+                shader_cache_access_log(m_core_id, m_type_id, 1); // log cache misses
+                if ( m_config.m_alloc_policy == ON_MISS ) {
+                        ((sector_cache_block*)m_lines[idx])->allocate_sector( time, mf->get_access_sector_mask() );
+                }
+                break;
+    case RESERVATION_FAIL:
+        m_res_fail++;
+        shader_cache_access_log(m_core_id, m_type_id, 1); // log cache misses
+        break;
+    default:
+        fprintf( stderr, "tag_array::access - Error: Unknown"
+            "cache_request_status %d\n", status );
+        abort();
+    }
+    return status;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 void tag_array::fill( new_addr_type addr, unsigned time, mem_fetch* mf)
 {
     fill(addr, time, mf->get_access_sector_mask());

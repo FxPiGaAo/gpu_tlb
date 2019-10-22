@@ -332,6 +332,100 @@ enum cache_request_status tag_array::probe( new_addr_type addr, unsigned &idx, m
     return MISS;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+enum cache_request_status tag_array::tlb_probe( new_addr_type addr, unsigned &idx, mem_fetch* mf, bool probe_mode) const {
+    mem_access_sector_mask_t mask = mf->get_access_sector_mask();
+    return tlb_probe(addr, idx, mask, probe_mode, mf);
+}
+
+
+enum cache_request_status tag_array::tlb_probe( new_addr_type addr, unsigned &idx, mem_access_sector_mask_t mask, bool probe_mode, mem_fetch* mf) const {
+    //assert( m_config.m_write_policy == READ_ONLY );
+    unsigned set_index = m_config.set_index(addr);
+    new_addr_type tag = m_config.tag(addr);
+
+    unsigned invalid_line = (unsigned)-1;
+    unsigned valid_line = (unsigned)-1;
+    unsigned long long valid_timestamp = (unsigned)-1;
+
+    bool all_reserved = true;
+
+    // check for hit or pending hit
+    for (unsigned way=0; way<m_config.m_assoc; way++) {
+        unsigned index = set_index*m_config.m_assoc+way;
+        cache_block_t *line = m_lines[index];
+        new_addr_type temp_a = (new_addr_type)(line->m_tag >> 12);
+        new_addr_type temp_b = (new_addr_type)(tag >> 12);
+        if (temp_a == temp_b) {
+            if ( line->get_status(mask) == RESERVED ) {
+                idx = index;
+                return HIT_RESERVED;
+            } else if ( line->get_status(mask) == VALID ) {
+                idx = index;
+                return HIT;
+            } else if ( line->get_status(mask) == MODIFIED) {
+                if(line->is_readable(mask)) {
+                                        idx = index;
+                                        return HIT;
+                }
+                else {
+                        idx = index;
+                        return SECTOR_MISS;
+                }
+
+            } else if ( line->is_valid_line() && line->get_status(mask) == INVALID ) {
+                idx = index;
+                return SECTOR_MISS;
+            }else {
+                assert( line->get_status(mask) == INVALID );
+            }
+        }
+        if (!line->is_reserved_line()) {
+            all_reserved = false;
+            if (line->is_invalid_line()) {
+                invalid_line = index;
+            } else {
+                // valid line : keep track of most appropriate replacement candidate
+                if ( m_config.m_replacement_policy == LRU ) {
+                    if ( line->get_last_access_time() < valid_timestamp ) {
+                        valid_timestamp = line->get_last_access_time();
+                        valid_line = index;
+                    }
+                } else if ( m_config.m_replacement_policy == FIFO ) {
+                    if ( line->get_alloc_time() < valid_timestamp ) {
+                        valid_timestamp = line->get_alloc_time();
+                        valid_line = index;
+                    }
+                }
+            }
+        }
+    }
+    if ( all_reserved ) {
+        assert( m_config.m_alloc_policy == ON_MISS );
+        return RESERVATION_FAIL; // miss and not enough space in cache to allocate on miss
+    }
+
+    if ( invalid_line != (unsigned)-1 ) {
+        idx = invalid_line;
+    } else if ( valid_line != (unsigned)-1) {
+        idx = valid_line;
+    } else abort(); // if an unreserved block exists, it is either invalid or replaceable 
+
+
+    if(probe_mode && m_config.is_streaming()){
+                line_table::const_iterator i = pending_lines.find(m_config.block_addr(addr));
+                assert(mf);
+                if ( !mf->is_write() && i != pending_lines.end() ) {
+                         if(i->second != mf->get_inst().get_uid())
+                                 return SECTOR_MISS;
+                }
+    }
+
+    return MISS;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
 enum cache_request_status tag_array::access( new_addr_type addr, unsigned time, unsigned &idx, mem_fetch* mf)
 {
     bool wb=false;

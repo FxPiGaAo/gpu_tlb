@@ -1311,7 +1311,8 @@ protected:
 
    ///////////////////////////////////////////////
    tlb_cache *m_tlb;// tlb cache
-   std::list<mem_fetch*> m_tlb_response_fifo;//tlb memory response fifo
+   std::deque<mem_fetch* > tlb_latency_queue;//tlb memory response fifo
+   unsigned int tlb_latency = 1;//tlb latency
    ///////////////////////////////////////////////
    tex_cache *m_L1T; // texture cache
    read_only_cache *m_L1C; // constant cache

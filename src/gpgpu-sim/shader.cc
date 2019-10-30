@@ -1745,7 +1745,25 @@ void ldst_unit::L1_latency_queue_cycle()
 
 }
 
-
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type)
+{
+   if( inst.empty() || (inst.space.get_type() != param_space_kernel) )
+       return true;
+   if( inst.active_count() == 0 ) 
+       return true;
+   mem_stage_stall_type fail = process_memory_access_queue(m_tlb,inst);
+   if (fail != NO_RC_FAIL){ 
+      rc_fail = fail; //keep other fails if this didn't fail.
+      fail_type = C_MEM;
+      if (rc_fail == BK_CONF or rc_fail == COAL_STALL) {
+         m_stats->gpgpu_n_cmem_portconflict++; //coal stalls aren't really a bank conflict, but this maintains previous behavior.
+      }
+   }
+   return true;
+   //return inst.accessq_empty(); //done if empty.
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool ldst_unit::constant_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type)
 {

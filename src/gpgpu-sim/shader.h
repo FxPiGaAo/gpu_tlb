@@ -1300,7 +1300,6 @@ protected:
 
    /////////////////////////////////////////////////////////////////////////////////////////////////
    //mem_stage_stall_type process_memory_access_queue_tlb( tlb_cache *cache, warp_inst_t &inst );
-   bool tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type);//process tlb access request
    warp_inst_t init_warp_inst;
    warp_inst_t* tlb_temp_inst = &init_warp_inst;//to make tlb 1 cycle hit latency
    //mem_stage_access_type* tlb_temp_type;

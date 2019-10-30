@@ -2619,7 +2619,10 @@ void ldst_unit::cycle()
 */
 
 ////////////////////////////////////////////////////////////
-   bool tlb_hit = 1;
+   enum mem_stage_stall_type new_rc_fail = NO_RC_FAIL;
+   warp_inst_t &tlb_pipe = *tlb_temp_inst;
+   mem_stage_access_type new_type;
+   bool tlb_hit = tlb_cycle(tlb_pipe,new_rc_fail,new_type);
    //if (tpc == 0 && sm == 0) {
      //fprintf(stdout, "Before:\t");
      //fprintf(stdout, "TPC %u, SM %u head pipeline register has type 0:\n", m_dispatch_reg,m_sid);

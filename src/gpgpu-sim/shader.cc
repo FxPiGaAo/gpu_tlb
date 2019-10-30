@@ -1603,8 +1603,10 @@ ldst_unit::process_cache_access( cache_t* cache,
         inst.accessq_pop_back();
         if ( inst.is_load() ) {
             for ( unsigned r=0; r < MAX_OUTPUT_VALUES; r++)
-                if (inst.out[r] > 0)
-                    m_pending_writes[inst.warp_id()][inst.out[r]]--; 
+                if (inst.out[r] > 0){
+                    //assert(m_pending_writes[inst.warp_id()][inst.out[r]]>0);
+                    m_pending_writes[inst.warp_id()][inst.out[r]]--;
+                    printf("ldst_unit::process_cache_access pending-- instpc: %u,warpid: %u,regid:%u pending num:%u\n",inst.pc,inst.warp_id(),inst.out[r],m_pending_writes[inst.warp_id()][inst.out[r]]);} 
         }
         if( !write_sent ) 
             delete mf;
@@ -1701,6 +1703,7 @@ void ldst_unit::L1_latency_queue_cycle()
 					   {
 						   assert(m_pending_writes[mf_next->get_inst().warp_id()][mf_next->get_inst().out[r]]>0);
 						   unsigned still_pending = --m_pending_writes[mf_next->get_inst().warp_id()][mf_next->get_inst().out[r]];
+                                                   printf("ldst_unit::L1_latency_queue_cycle pending-- instpc: %u,warpid: %u,regid:%u pending num:%u\n",mf_next->get_inst().pc,mf_next->get_inst().warp_id(),mf_next->get_inst().out[r],m_pending_writes[mf_next->get_inst().warp_id()][mf_next->get_inst().out[r]]);
 						   if(!still_pending)
 						   {
 							m_pending_writes[mf_next->get_inst().warp_id()].erase(mf_next->get_inst().out[r]);
@@ -1750,6 +1753,7 @@ bool ldst_unit::constant_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail
        return true;
    if( inst.active_count() == 0 ) 
        return true;
+   printf("CONSTANT MEMORY ACCESS!,instid=%u,warpid=%u\n",inst.pc,inst.warp_id());
    mem_stage_stall_type fail = process_memory_access_queue(m_L1C,inst);
    if (fail != NO_RC_FAIL){ 
       rc_fail = fail; //keep other fails if this didn't fail.
@@ -1767,6 +1771,7 @@ bool ldst_unit::texture_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail,
        return true;
    if( inst.active_count() == 0 ) 
        return true;
+   printf("TEXTURE MEMEORY ACCESS!,instid=%u,warpid=%u\n",inst.pc,inst.warp_id());
    mem_stage_stall_type fail = process_memory_access_queue(m_L1T,inst);
    if (fail != NO_RC_FAIL){ 
       rc_fail = fail; //keep other fails if this didn't fail.
@@ -1785,6 +1790,7 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
    if( inst.active_count() == 0 ) 
        return true;
    assert( !inst.accessq_empty() );
+   printf("DATACACHE ACCESS!,instid=%u,warpid=%u\n",inst.pc,inst.warp_id());
    mem_stage_stall_type stall_cond = NO_RC_FAIL;
    const mem_access_t &access = inst.accessq_back();
 
@@ -1832,6 +1838,63 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
    return inst.accessq_empty(); 
 }
 
+/////////////////////////////////////////////////////////////////////////////////
+bool ldst_unit::new_memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_reason, mem_stage_access_type &access_type )
+{
+   if(inst.empty() ||((inst.space.get_type() != global_space) &&
+        (inst.space.get_type() != local_space) &&
+        (inst.space.get_type() != param_space_local)))
+       return true;
+   if( inst.active_count() == 0 )
+       return true;
+   assert( !inst.accessq_empty() );
+   mem_stage_stall_type stall_cond = NO_RC_FAIL;
+   const mem_access_t &access = inst.accessq_back();
+
+   bool bypassL1D = false;
+   if ( CACHE_GLOBAL == inst.cache_op || (m_L1D == NULL) ) {
+       bypassL1D = true;
+   } else if (inst.space.is_global()) { // global memory access 
+       // skip L1 cache if the option is enabled
+       if (m_core->get_config()->gmem_skip_L1D && (CACHE_L1 != inst.cache_op))
+           bypassL1D = true;
+   }
+   if( bypassL1D ) {
+       // bypass L1 cache
+       unsigned control_size = inst.is_store() ? WRITE_PACKET_SIZE : READ_PACKET_SIZE;
+       unsigned size = access.get_size() + control_size;
+       //printf("Interconnect:Addr: %x, size=%d\n",access.get_addr(),size);
+       if( m_icnt->full(size, inst.is_store() || inst.isatomic()) ) {
+           stall_cond = ICNT_RC_FAIL;
+       } else {
+           mem_fetch *mf = m_mf_allocator->alloc(inst,access);
+           m_icnt->push(mf);
+           inst.accessq_pop_back();
+           //inst.clear_active( access.get_warp_mask() );
+           if( inst.is_load() ) {
+              for( unsigned r=0; r < MAX_OUTPUT_VALUES; r++)
+                  if(inst.out[r] > 0)
+                      assert( m_pending_writes[inst.warp_id()][inst.out[r]] > 0 );
+           } else if( inst.is_store() )
+              m_core->inc_store_req( inst.warp_id() );
+       }
+   } else {
+       assert( CACHE_UNDEFINED != inst.cache_op );
+       stall_cond = process_memory_access_queue_l1cache(m_L1D,inst);
+   }
+   if( !inst.accessq_empty() && stall_cond == NO_RC_FAIL)
+       stall_cond = COAL_STALL;
+   if (stall_cond != NO_RC_FAIL) {
+      stall_reason = stall_cond;
+      bool iswrite = inst.is_store();
+      if (inst.space.is_local())
+         access_type = (iswrite)?L_MEM_ST:L_MEM_LD;
+      else
+         access_type = (iswrite)?G_MEM_ST:G_MEM_LD;
+   }
+   return inst.accessq_empty();
+}
+/////////////////////////////////////////////////////////////////////////////////
 
 bool ldst_unit::response_buffer_full() const
 {
@@ -2169,6 +2232,7 @@ void ldst_unit:: issue( register_set &reg_set )
          unsigned reg_id = inst->out[r];
          if (reg_id > 0) {
             m_pending_writes[warp_id][reg_id] += n_accesses;
+            printf("ldst_unit::issue pending+ instpc: %u,warpid: %u,regid:%u pending num:%u\n",inst->pc,warp_id,reg_id,m_pending_writes[warp_id][reg_id]);
          }
       }
    }
@@ -2189,9 +2253,16 @@ void ldst_unit::writeback()
             bool insn_completed = false; 
             for( unsigned r=0; r < MAX_OUTPUT_VALUES; r++ ) {
                 if( m_next_wb.out[r] > 0 ) {
-                    if( m_next_wb.space.get_type() != shared_space ) {
+                    if( (m_next_wb.space.get_type() != shared_space) && (m_next_wb.space.get_type()!=0)) {
+                        //assert(m_next_wb.space.get_type() != 0);
+                        if( m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]] <= 0 ) {
+                          printf("ERROR WRITEBACK on warp %u, inst %u, reg%u, pending number=%u, memory_space_type=%d\n", m_next_wb.warp_id(), m_next_wb.pc, m_next_wb.out[r],m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]],m_next_wb.space.get_type());
+                          fprintf(stdout, "TPC %u, SM %u m_next_wb has pending writes, type: %u:\n", m_tpc, m_sid, m_next_wb.space.get_type());
+                          m_next_wb.print(stdout);
+                        }
                         assert( m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]] > 0 );
                         unsigned still_pending = --m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]];
+                        printf("lsdt_unit::writeback pending-- warp %u inst %u reg%u pending number=%u\n", m_next_wb.warp_id(), m_next_wb.pc, m_next_wb.out[r],m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]]);
                         if( !still_pending ) {
                             m_pending_writes[m_next_wb.warp_id()].erase(m_next_wb.out[r]);
                             m_scoreboard->releaseRegister( m_next_wb.warp_id(), m_next_wb.out[r] );
@@ -2219,6 +2290,7 @@ void ldst_unit::writeback()
         case 0: // shared memory 
             if( !m_pipeline_reg[0]->empty() ) {
                 m_next_wb = *m_pipeline_reg[0];
+                assert(m_next_wb.space.get_type()!=0);
                 if(m_next_wb.isatomic()) {
                     m_next_wb.do_atomic();
                     m_core->decrement_atomic_count(m_next_wb.warp_id(), m_next_wb.active_count());
@@ -2232,6 +2304,7 @@ void ldst_unit::writeback()
             if( m_L1T->access_ready() ) {
                 mem_fetch *mf = m_L1T->next_access();
                 m_next_wb = mf->get_inst();
+                assert(m_next_wb.space.get_type()!=0);
                 delete mf;
                 serviced_client = next_client; 
             }
@@ -2240,6 +2313,7 @@ void ldst_unit::writeback()
             if( m_L1C->access_ready() ) {
                 mem_fetch *mf = m_L1C->next_access();
                 m_next_wb = mf->get_inst();
+                assert(m_next_wb.space.get_type()!=0);
                 delete mf;
                 serviced_client = next_client; 
             }
@@ -2247,6 +2321,7 @@ void ldst_unit::writeback()
         case 3: // global/local
             if( m_next_global ) {
                 m_next_wb = m_next_global->get_inst();
+                assert(m_next_wb.space.get_type()!=0);
                 if( m_next_global->isatomic() ) 
                     m_core->decrement_atomic_count(m_next_global->get_wid(),m_next_global->get_access_warp_mask().count());
                 delete m_next_global;
@@ -2258,6 +2333,7 @@ void ldst_unit::writeback()
             if( m_L1D && m_L1D->access_ready() ) {
                 mem_fetch *mf = m_L1D->next_access();
                 m_next_wb = mf->get_inst();
+                assert(m_next_wb.space.get_type()!=0);
                 delete mf;
                 serviced_client = next_client; 
             }
@@ -2306,12 +2382,40 @@ void ldst_unit::issue( register_set &reg_set )
 */
 void ldst_unit::cycle()
 {
-   writeback();
-   m_operand_collector->step();
-   for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ ) 
-       if( m_pipeline_reg[stage]->empty() && !m_pipeline_reg[stage+1]->empty() )
-            move_warp(m_pipeline_reg[stage], m_pipeline_reg[stage+1]);
+/////////////////////////////////////////////////////////////////////////
+  //fprintf(stdout, "TPC %u, SM %u:", m_tpc, m_sid);
+  if((m_tpc == 16) && (m_sid == 32)){
+  for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ ){
+       if(m_pipeline_reg[stage]->empty()) printf("%u nul|\t",stage);
+       else {int space_type_num = m_pipeline_reg[stage]->space.get_type();
+             unsigned warpid = m_pipeline_reg[stage]->warp_id();
+             unsigned pc = m_pipeline_reg[stage]->pc;
+             printf("wid:%u,inst:%u,type,%d|\t",warpid,pc,space_type_num);
+             //printf("warpid:%u,instid:%u\t",m_pipeline_reg[stage]->warp_id,m_pipeline_reg[stage]->pc);
+       }
+   }
+   printf("\n\n");
+   }
+////////////////////////////////////////////////////////////////////////////
 
+/*
+   if(!m_pipeline_reg[0]->empty()) {
+     fprintf(stdout, "TPC %u, SM %u head pipeline register has type 0:\n", m_tpc, m_sid);
+     m_pipeline_reg[0]->print(stdout);
+     assert(m_pipeline_reg[0]->space.get_type()!=0);
+   }
+*/
+   assert(m_next_wb.empty() || (m_next_wb.space.get_type() != 0));
+   writeback();
+   assert(m_next_wb.empty() || (m_next_wb.space.get_type() != 0));
+   m_operand_collector->step();
+   //if(!m_pipeline_reg[0]->empty()) assert(m_pipeline_reg[0]->space.get_type()!=0);
+   for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ )
+       if( m_pipeline_reg[stage]->empty() && !m_pipeline_reg[stage+1]->empty() ){
+            assert(m_pipeline_reg[stage+1]->space.get_type()!=0);
+            move_warp(m_pipeline_reg[stage], m_pipeline_reg[stage+1]);
+            }
+   //if(!m_pipeline_reg[0]->empty()) assert(m_pipeline_reg[0]->space.get_type()!=0);
    if( !m_response_fifo.empty() ) {
        mem_fetch *mf = m_response_fifo.front();
        if (mf->get_access_type() == TEXTURE_ACC_R) {
@@ -2364,41 +2468,93 @@ void ldst_unit::cycle()
 	   		L1_latency_queue_cycle();
    }
 
-/////////////////////////////////////////////////////////////
-   bool tlb_hit = 1;
-/////////////////////////////////////////////////////////////
-
-
-
+/*
    warp_inst_t &pipe_reg = *m_dispatch_reg;
    enum mem_stage_stall_type rc_fail = NO_RC_FAIL;
    mem_stage_access_type type;
    bool done = true;
-////////////////////////////////////////////////////////////
-   if(tlb_hit == 1){
-////////////////////////////////////////////////////////////
-
    done &= shared_cycle(pipe_reg, rc_fail, type);
    done &= constant_cycle(pipe_reg, rc_fail, type);
    done &= texture_cycle(pipe_reg, rc_fail, type);
-   done &= memory_cycle(pipe_reg, rc_fail, type);
-   m_mem_rc = rc_fail;
+   //done &= memory_cycle(pipe_reg, rc_fail, type);
+*/ 
 
-////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
+     warp_inst_t &new_pipe_reg = *tlb_temp_inst;
+     enum mem_stage_stall_type rc_fail = NO_RC_FAIL;
+     mem_stage_access_type type;
+     bool done = true;
+   if(inst_valid == 1){
+     done &= shared_cycle(new_pipe_reg, rc_fail, type);
+     done &= constant_cycle(new_pipe_reg, rc_fail, type);
+     done &= texture_cycle(new_pipe_reg, rc_fail, type);
+     //mem_stage_access_type new_type;
+     done &= memory_cycle(new_pipe_reg, rc_fail, type);
+     m_mem_rc = rc_fail;
+     if (!done) { // log stall types and return
+        assert(rc_fail != NO_RC_FAIL);
+        m_stats->gpgpu_n_stall_shd_mem++;
+        m_stats->gpu_stall_shd_mem_breakdown[type][rc_fail]++;
+        return;
+     }
    }
-   else{
-       done = 0;
-   }
-////////////////////////////////////////////////////////////
 
-   if (!done) { // log stall types and return
-      assert(rc_fail != NO_RC_FAIL);
-      m_stats->gpgpu_n_stall_shd_mem++;
-      m_stats->gpu_stall_shd_mem_breakdown[type][rc_fail]++;
-      return;
+   if( !new_pipe_reg.empty() ) {
+       unsigned warp_id = new_pipe_reg.warp_id();
+       if( new_pipe_reg.is_load() ) {
+           if( new_pipe_reg.space.get_type() == shared_space ) {
+             // printf("There is one shared memory load. instid=%u,warpid=%u\n",new_pipe_reg.pc,new_pipe_reg.warp_id());
+               if( m_pipeline_reg[m_config->smem_latency-1]->empty() ) {
+                   // new shared memory request
+                  //move_warp(m_pipeline_reg[m_config->smem_latency-1],m_dispatch_reg);
+                  //m_dispatch_reg->clear();
+                   assert(tlb_temp_inst->space.get_type()!=0);
+                   move_warp(m_pipeline_reg[m_config->smem_latency-1],tlb_temp_inst);
+                   tlb_temp_inst->clear();
+
+               }
+               else{//printf("shared memory stuck!\n");assert(0==1);
+ }
+           } else {
+               //if( pipe_reg.active_count() > 0 ) {
+               //    if( !m_operand_collector->writeback(pipe_reg) ) 
+               //        return;
+               //} 
+
+               bool pending_requests=false;
+               for( unsigned r=0; r<MAX_OUTPUT_VALUES; r++ ) {
+                   unsigned reg_id = new_pipe_reg.out[r];
+                   if( reg_id > 0 ) {
+                       if( m_pending_writes[warp_id].find(reg_id) != m_pending_writes[warp_id].end() ) {
+                           if ( m_pending_writes[warp_id][reg_id] > 0 ) {
+                               pending_requests=true;
+                               break;
+                           } else {
+                               // this instruction is done already
+                               m_pending_writes[warp_id].erase(reg_id);
+                           }
+                       }
+                   }
+               }
+               if( !pending_requests ) {
+                   m_core->warp_inst_complete(*tlb_temp_inst);
+                   m_scoreboard->releaseRegisters(tlb_temp_inst);
+               }
+               m_core->dec_inst_in_pipeline(warp_id);
+               tlb_temp_inst->clear();
+           }
+       } else {
+           // stores exit pipeline here
+           m_core->dec_inst_in_pipeline(warp_id);
+           m_core->warp_inst_complete(*tlb_temp_inst);
+           tlb_temp_inst->clear();
+       }
    }
 
-   if( !pipe_reg.empty() ) {
+/////////////////////////////////////////////////////////////////////////////
+
+
+/*   if( !pipe_reg.empty() ) {
        unsigned warp_id = pipe_reg.warp_id();
        if( pipe_reg.is_load() ) {
            if( pipe_reg.space.get_type() == shared_space ) {
@@ -2442,6 +2598,31 @@ void ldst_unit::cycle()
            m_dispatch_reg->clear();
        }
    }
+*/
+
+////////////////////////////////////////////////////////////
+   bool tlb_hit = 1;
+   //if (tpc == 0 && sm == 0) {
+     //fprintf(stdout, "Before:\t");
+     //fprintf(stdout, "TPC %u, SM %u head pipeline register has type 0:\n", m_dispatch_reg,m_sid);
+     //m_dispatch_reg->print(stdout);
+   //}
+   move_warp(tlb_temp_inst, m_dispatch_reg);
+   m_dispatch_reg->clear();
+   //tlb_temp_inst = m_dispatch_reg;
+   //if (tpc == 0 && sm == 0) {
+     //fprintf(stdout, "After:\t");
+     //tlb_temp_inst->print(stdout);
+   //}
+   if(tlb_hit == 1){
+     inst_valid = 1;
+     //tlb_temp_type = *type;
+     //tlb_temp_inst = m_dispatch_reg;
+   }else{
+     inst_valid = 0;
+   }
+//if(!m_pipeline_reg[0]->empty()) assert(m_pipeline_reg[0]->space.get_type()!=0);
+////////////////////////////////////////////////////////////
 }
 
 void shader_core_ctx::register_cta_thread_exit( unsigned cta_num, kernel_info_t * kernel)

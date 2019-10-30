@@ -2402,6 +2402,7 @@ void ldst_unit::cycle()
 {
 /////////////////////////////////////////////////////////////////////////
   //fprintf(stdout, "TPC %u, SM %u:", m_tpc, m_sid);
+  /*
   if((m_tpc == 16) && (m_sid == 32)){
   for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ ){
        if(m_pipeline_reg[stage]->empty()) printf("%u nul|\t",stage);
@@ -2414,6 +2415,7 @@ void ldst_unit::cycle()
    }
    printf("\n\n");
    }
+*/
 ////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -2423,9 +2425,9 @@ void ldst_unit::cycle()
      assert(m_pipeline_reg[0]->space.get_type()!=0);
    }
 */
-   assert(m_next_wb.empty() || (m_next_wb.space.get_type() != 0));
+  // assert(m_next_wb.empty() || (m_next_wb.space.get_type() != 0));
    writeback();
-   assert(m_next_wb.empty() || (m_next_wb.space.get_type() != 0));
+  // assert(m_next_wb.empty() || (m_next_wb.space.get_type() != 0));
    m_operand_collector->step();
    //if(!m_pipeline_reg[0]->empty()) assert(m_pipeline_reg[0]->space.get_type()!=0);
    for( unsigned stage=0; (stage+1)<m_pipeline_depth; stage++ )
@@ -2629,7 +2631,7 @@ void ldst_unit::cycle()
      //m_dispatch_reg->print(stdout);
    //}
    move_warp(tlb_temp_inst, m_dispatch_reg);
-   m_dispatch_reg->clear();
+   //m_dispatch_reg->clear();
    //tlb_temp_inst = m_dispatch_reg;
    //if (tpc == 0 && sm == 0) {
      //fprintf(stdout, "After:\t");

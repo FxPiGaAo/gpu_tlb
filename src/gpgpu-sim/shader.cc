@@ -1753,8 +1753,8 @@ bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem
    if( inst.active_count() == 0 ) 
        return true;
    mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
-   new_addr_type block_addr = m_tlb->m_config.block_addr(mf->get_addr());
-   enum cache_request_status status = m_tlb->m_tag_array->probe(block_addr);
+   enum cache_request_status tlb_status;
+   m_tlb->access(mf->get_addr(),tlb_status);
    //mem_stage_stall_type fail = process_memory_access_queue(m_tlb,inst);
    /*if (fail != NO_RC_FAIL){ 
       rc_fail = fail; //keep other fails if this didn't fail.

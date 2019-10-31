@@ -1308,7 +1308,10 @@ public:
     virtual enum cache_request_status access( new_addr_type addr, mem_fetch *mf, unsigned time, std::list<cache_event> &events );
 
     virtual ~tlb_cache(){}
-
+    enum cache_request_status access( new_addr_type addr, cache_request_status &status){
+         new_addr_type block_addr = m_config.block_addr(addr);
+         status = m_tag_array->modified_tlb_probe(block_addr);
+    };
 protected:
     tlb_cache( const char *name, cache_config &config, int core_id, int type_id, mem_fetch_interface *memport, enum mem_fetch_status status, tag_array* new_tag_array )
     : baseline_cache(name,config,core_id,type_id,memport,status, new_tag_array){}

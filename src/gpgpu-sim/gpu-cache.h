@@ -115,7 +115,7 @@ struct cache_block_t {
     virtual bool is_valid_line() = 0;
     virtual bool is_reserved_line() = 0;
     virtual bool is_modified_line() = 0;
-
+    virtual enum cache_block_state tlb_get_status() = 0;
     virtual enum cache_block_state get_status( mem_access_sector_mask_t sector_mask) = 0;
     virtual void set_status(enum cache_block_state m_status, mem_access_sector_mask_t sector_mask) = 0;
 
@@ -188,6 +188,9 @@ struct line_cache_block: public cache_block_t  {
 	    {
 	    	return m_status;
 	    }
+
+                enum cache_block_state tlb_get_status(){return m_status;};
+
 		virtual void set_status(enum cache_block_state status, mem_access_sector_mask_t sector_mask)
 	    {
 	    	m_status = status;
@@ -350,6 +353,11 @@ struct sector_cache_block : public cache_block_t {
 		}
 		return false;
     }
+//fake function just to cheat the compiler
+    virtual enum cache_block_state tlb_get_status()
+        {
+                return m_status[0];
+        }
 
     virtual enum cache_block_state get_status(mem_access_sector_mask_t sector_mask)
 	{
@@ -803,6 +811,7 @@ public:
     enum cache_request_status access( new_addr_type addr, unsigned time, unsigned &idx, bool &wb, evicted_block_info &evicted, mem_fetch* mf );
 
     /////////////////////////////////////////////////////////////////////////
+    enum cache_request_status modified_tlb_probe( new_addr_type addr) const;
     enum cache_request_status tlb_probe( new_addr_type addr, unsigned &idx, mem_fetch* mf, bool probe_mode=false ) const;
     enum cache_request_status tlb_probe( new_addr_type addr, unsigned &idx, mem_access_sector_mask_t mask, bool probe_mode=false, mem_fetch* mf = NULL ) const;
     enum cache_request_status tlb_access( new_addr_type addr, unsigned time, unsigned &idx, mem_fetch* mf );

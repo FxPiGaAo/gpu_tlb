@@ -338,7 +338,6 @@ enum cache_request_status tag_array::tlb_probe( new_addr_type addr, unsigned &id
     return tlb_probe(addr, idx, mask, probe_mode, mf);
 }
 
-
 enum cache_request_status tag_array::tlb_probe( new_addr_type addr, unsigned &idx, mem_access_sector_mask_t mask, bool probe_mode, mem_fetch* mf) const {
     //assert( m_config.m_write_policy == READ_ONLY );
     unsigned set_index = m_config.set_index(addr);
@@ -421,6 +420,40 @@ enum cache_request_status tag_array::tlb_probe( new_addr_type addr, unsigned &id
                 }
     }
 
+    return MISS;
+}
+
+enum cache_request_status tag_array::modified_tlb_probe( new_addr_type addr) const {
+    //assert( m_config.m_write_policy == READ_ONLY );
+    unsigned set_index = m_config.set_index(addr);
+    new_addr_type tag = m_config.tag(addr);
+
+    unsigned invalid_line = (unsigned)-1;
+    unsigned valid_line = (unsigned)-1;
+    //unsigned long long valid_timestamp = (unsigned)-1;
+
+    // check for hit or pending hit
+    for (unsigned way=0; way<m_config.m_assoc; way++) {
+        unsigned index = set_index*m_config.m_assoc+way;
+        cache_block_t *line = m_lines[index];
+        new_addr_type temp_a = (new_addr_type)(line->m_tag >> 12);
+        new_addr_type temp_b = (new_addr_type)(tag >> 12);
+        if (temp_a == temp_b) return HIT;
+    }
+    for (unsigned way=0; way<m_config.m_assoc; way++){
+        unsigned index = set_index*m_config.m_assoc+way;
+        cache_block_t *line = m_lines[index];
+        if ( line->tlb_get_status() != VALID ){
+        line->set_status(VALID,(mem_access_sector_mask_t)0);
+        line->m_tag = tag;
+        return MISS;
+        }
+    }
+
+    //randomly update the tag
+    unsigned way = rand()%m_config.m_assoc;
+    m_lines[set_index*m_config.m_assoc+way]->m_tag = tag;
+    
     return MISS;
 }
 

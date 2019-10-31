@@ -1752,14 +1752,17 @@ bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem
        return true;
    if( inst.active_count() == 0 ) 
        return true;
-   mem_stage_stall_type fail = process_memory_access_queue(m_tlb,inst);
-   if (fail != NO_RC_FAIL){ 
+   mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
+   new_addr_type block_addr = m_tlb->m_config.block_addr(mf->get_addr());
+   enum cache_request_status status = m_tlb->m_tag_array->probe(block_addr);
+   //mem_stage_stall_type fail = process_memory_access_queue(m_tlb,inst);
+   /*if (fail != NO_RC_FAIL){ 
       rc_fail = fail; //keep other fails if this didn't fail.
       fail_type = C_MEM;
       if (rc_fail == BK_CONF or rc_fail == COAL_STALL) {
          m_stats->gpgpu_n_cmem_portconflict++; //coal stalls aren't really a bank conflict, but this maintains previous behavior.
       }
-   }
+   }*/
    return true;
    //return inst.accessq_empty(); //done if empty.
 }

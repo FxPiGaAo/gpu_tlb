@@ -1606,7 +1606,8 @@ ldst_unit::process_cache_access( cache_t* cache,
                 if (inst.out[r] > 0){
                     //assert(m_pending_writes[inst.warp_id()][inst.out[r]]>0);
                     m_pending_writes[inst.warp_id()][inst.out[r]]--;
-                    printf("ldst_unit::process_cache_access pending-- instpc: %u,warpid: %u,regid:%u pending num:%u\n",inst.pc,inst.warp_id(),inst.out[r],m_pending_writes[inst.warp_id()][inst.out[r]]);} 
+                    //printf("ldst_unit::process_cache_access pending-- instpc: %u,warpid: %u,regid:%u pending num:%u\n",inst.pc,inst.warp_id(),inst.out[r],m_pending_writes[inst.warp_id()][inst.out[r]]);
+                 } 
         }
         if( !write_sent ) 
             delete mf;
@@ -1703,7 +1704,7 @@ void ldst_unit::L1_latency_queue_cycle()
 					   {
 						   assert(m_pending_writes[mf_next->get_inst().warp_id()][mf_next->get_inst().out[r]]>0);
 						   unsigned still_pending = --m_pending_writes[mf_next->get_inst().warp_id()][mf_next->get_inst().out[r]];
-                                                   printf("ldst_unit::L1_latency_queue_cycle pending-- instpc: %u,warpid: %u,regid:%u pending num:%u\n",mf_next->get_inst().pc,mf_next->get_inst().warp_id(),mf_next->get_inst().out[r],m_pending_writes[mf_next->get_inst().warp_id()][mf_next->get_inst().out[r]]);
+                                                   //printf("ldst_unit::L1_latency_queue_cycle pending-- instpc: %u,warpid: %u,regid:%u pending num:%u\n",mf_next->get_inst().pc,mf_next->get_inst().warp_id(),mf_next->get_inst().out[r],m_pending_writes[mf_next->get_inst().warp_id()][mf_next->get_inst().out[r]]);
 						   if(!still_pending)
 						   {
 							m_pending_writes[mf_next->get_inst().warp_id()].erase(mf_next->get_inst().out[r]);
@@ -1748,8 +1749,8 @@ void ldst_unit::L1_latency_queue_cycle()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem_stage_access_type &fail_type)
 {
-   if( inst.empty() || (inst.space.get_type() != param_space_kernel) )
-       return true;
+   //if( inst.empty() || (inst.space.get_type() != param_space_kernel) )
+    if( inst.empty())    return true;
    if( inst.active_count() == 0 ) 
        return true;
    mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
@@ -1780,7 +1781,7 @@ bool ldst_unit::constant_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail
        return true;
    if( inst.active_count() == 0 ) 
        return true;
-   printf("CONSTANT MEMORY ACCESS!,instid=%u,warpid=%u\n",inst.pc,inst.warp_id());
+   //printf("CONSTANT MEMORY ACCESS!,instid=%u,warpid=%u\n",inst.pc,inst.warp_id());
    mem_stage_stall_type fail = process_memory_access_queue(m_L1C,inst);
    if (fail != NO_RC_FAIL){ 
       rc_fail = fail; //keep other fails if this didn't fail.
@@ -2646,15 +2647,16 @@ void ldst_unit::cycle()
      //tlb_temp_inst->print(stdout);
    //}
    if(tlb_hit == true){
-    printf("T\n");
+    //printf("T\n");
     move_warp(tlb_temp_inst, m_dispatch_reg);
     inst_valid = 1;
      //tlb_temp_type = *type;
      //tlb_temp_inst = m_dispatch_reg;
    }else{
      printf("F\n");
-     m_dispatch_reg->clear();
-     tlb_temp_inst->clear();
+     //move_warp(tlb_temp_inst, m_dispatch_reg);
+     //m_dispatch_reg->clear();
+     //tlb_temp_inst->clear();
      inst_valid = 0;
    }
 //if(!m_pipeline_reg[0]->empty()) assert(m_pipeline_reg[0]->space.get_type()!=0);

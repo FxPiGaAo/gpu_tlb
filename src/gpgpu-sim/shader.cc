@@ -1755,6 +1755,8 @@ bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem
    mem_fetch *mf = m_mf_allocator->alloc(inst,inst.accessq_back());
    enum cache_request_status tlb_status;
    m_tlb->access(mf->get_addr(),tlb_status);
+   delete mf;
+   if(tlb_status == HIT){
    //mem_stage_stall_type fail = process_memory_access_queue(m_tlb,inst);
    /*if (fail != NO_RC_FAIL){ 
       rc_fail = fail; //keep other fails if this didn't fail.
@@ -1763,7 +1765,11 @@ bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem
          m_stats->gpgpu_n_cmem_portconflict++; //coal stalls aren't really a bank conflict, but this maintains previous behavior.
       }
    }*/
-   return true;
+       return true;
+   }
+   else{
+       return false;
+   }
    //return inst.accessq_empty(); //done if empty.
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1811,7 +1817,7 @@ bool ldst_unit::memory_cycle( warp_inst_t &inst, mem_stage_stall_type &stall_rea
    if( inst.active_count() == 0 ) 
        return true;
    assert( !inst.accessq_empty() );
-   printf("DATACACHE ACCESS!,instid=%u,warpid=%u\n",inst.pc,inst.warp_id());
+   //printf("DATACACHE ACCESS!,instid=%u,warpid=%u\n",inst.pc,inst.warp_id());
    mem_stage_stall_type stall_cond = NO_RC_FAIL;
    const mem_access_t &access = inst.accessq_back();
 
@@ -2253,7 +2259,7 @@ void ldst_unit:: issue( register_set &reg_set )
          unsigned reg_id = inst->out[r];
          if (reg_id > 0) {
             m_pending_writes[warp_id][reg_id] += n_accesses;
-            printf("ldst_unit::issue pending+ instpc: %u,warpid: %u,regid:%u pending num:%u\n",inst->pc,warp_id,reg_id,m_pending_writes[warp_id][reg_id]);
+            //printf("ldst_unit::issue pending+ instpc: %u,warpid: %u,regid:%u pending num:%u\n",inst->pc,warp_id,reg_id,m_pending_writes[warp_id][reg_id]);
          }
       }
    }
@@ -2277,13 +2283,13 @@ void ldst_unit::writeback()
                     if( (m_next_wb.space.get_type() != shared_space) && (m_next_wb.space.get_type()!=0)) {
                         //assert(m_next_wb.space.get_type() != 0);
                         if( m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]] <= 0 ) {
-                          printf("ERROR WRITEBACK on warp %u, inst %u, reg%u, pending number=%u, memory_space_type=%d\n", m_next_wb.warp_id(), m_next_wb.pc, m_next_wb.out[r],m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]],m_next_wb.space.get_type());
-                          fprintf(stdout, "TPC %u, SM %u m_next_wb has pending writes, type: %u:\n", m_tpc, m_sid, m_next_wb.space.get_type());
+                          //printf("ERROR WRITEBACK on warp %u, inst %u, reg%u, pending number=%u, memory_space_type=%d\n", m_next_wb.warp_id(), m_next_wb.pc, m_next_wb.out[r],m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]],m_next_wb.space.get_type());
+                          //fprintf(stdout, "TPC %u, SM %u m_next_wb has pending writes, type: %u:\n", m_tpc, m_sid, m_next_wb.space.get_type());
                           m_next_wb.print(stdout);
                         }
                         assert( m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]] > 0 );
                         unsigned still_pending = --m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]];
-                        printf("lsdt_unit::writeback pending-- warp %u inst %u reg%u pending number=%u\n", m_next_wb.warp_id(), m_next_wb.pc, m_next_wb.out[r],m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]]);
+                        //printf("lsdt_unit::writeback pending-- warp %u inst %u reg%u pending number=%u\n", m_next_wb.warp_id(), m_next_wb.pc, m_next_wb.out[r],m_pending_writes[m_next_wb.warp_id()][m_next_wb.out[r]]);
                         if( !still_pending ) {
                             m_pending_writes[m_next_wb.warp_id()].erase(m_next_wb.out[r]);
                             m_scoreboard->releaseRegister( m_next_wb.warp_id(), m_next_wb.out[r] );
@@ -2522,7 +2528,7 @@ void ldst_unit::cycle()
      }
    }
 
-   if( !new_pipe_reg.empty() ) {
+   if( !new_pipe_reg.empty() && inst_valid) {
        unsigned warp_id = new_pipe_reg.warp_id();
        if( new_pipe_reg.is_load() ) {
            if( new_pipe_reg.space.get_type() == shared_space ) {
@@ -2625,26 +2631,30 @@ void ldst_unit::cycle()
 
 ////////////////////////////////////////////////////////////
    enum mem_stage_stall_type new_rc_fail = NO_RC_FAIL;
-   warp_inst_t &tlb_pipe = *tlb_temp_inst;
+   warp_inst_t &pipe_reg = *m_dispatch_reg;
    mem_stage_access_type new_type;
-   bool tlb_hit = tlb_cycle(tlb_pipe,new_rc_fail,new_type);
+   bool tlb_hit = tlb_cycle(pipe_reg,new_rc_fail,new_type);
    //if (tpc == 0 && sm == 0) {
      //fprintf(stdout, "Before:\t");
      //fprintf(stdout, "TPC %u, SM %u head pipeline register has type 0:\n", m_dispatch_reg,m_sid);
      //m_dispatch_reg->print(stdout);
    //}
-   move_warp(tlb_temp_inst, m_dispatch_reg);
    //m_dispatch_reg->clear();
    //tlb_temp_inst = m_dispatch_reg;
    //if (tpc == 0 && sm == 0) {
      //fprintf(stdout, "After:\t");
      //tlb_temp_inst->print(stdout);
    //}
-   if(tlb_hit == 1){
-     inst_valid = 1;
+   if(tlb_hit == true){
+    printf("T\n");
+    move_warp(tlb_temp_inst, m_dispatch_reg);
+    inst_valid = 1;
      //tlb_temp_type = *type;
      //tlb_temp_inst = m_dispatch_reg;
    }else{
+     printf("F\n");
+     m_dispatch_reg->clear();
+     tlb_temp_inst->clear();
      inst_valid = 0;
    }
 //if(!m_pipeline_reg[0]->empty()) assert(m_pipeline_reg[0]->space.get_type()!=0);

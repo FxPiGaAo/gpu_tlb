@@ -2639,7 +2639,7 @@ void ldst_unit::cycle()
    if(tlb_remain_latency == 0){
        tlb_hit = tlb_cycle(pipe_reg,new_rc_fail,new_type);
        if(tlb_hit == false){
-           tlb_remain_latency = 19;
+           tlb_remain_latency = m_shader->m_config->tlb_miss_latency-1;
            m_stats->gpu_stall_shd_mem_breakdown[new_type][new_rc_fail]++;
        }
    }

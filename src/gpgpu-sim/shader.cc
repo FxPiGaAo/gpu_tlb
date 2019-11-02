@@ -2088,7 +2088,7 @@ void int_unit :: issue(register_set& source_reg)
 
 pipelined_simd_unit::pipelined_simd_unit( register_set* result_port, const shader_core_config *config, unsigned max_latency,shader_core_ctx *core )
     : simd_function_unit(config) 
-{
+{   tlb_miss_latency = config->tlb_miss_latency;
     m_result_port = result_port;
     m_pipeline_depth = max_latency;
     m_pipeline_reg = new warp_inst_t*[m_pipeline_depth];
@@ -2639,7 +2639,7 @@ void ldst_unit::cycle()
    if(tlb_remain_latency == 0){
        tlb_hit = tlb_cycle(pipe_reg,new_rc_fail,new_type);
        if(tlb_hit == false){
-           tlb_remain_latency = m_shader->m_config->tlb_miss_latency-1;
+           tlb_remain_latency = tlb_miss_latency-1;
            m_stats->gpu_stall_shd_mem_breakdown[new_type][new_rc_fail]++;
        }
    }

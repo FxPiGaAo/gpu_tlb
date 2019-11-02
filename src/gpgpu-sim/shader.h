@@ -1100,7 +1100,7 @@ public:
         }
     }
 public: 
-    int tlb_miss_latency = config->tlb_latency;
+    int tlb_miss_latency = 1;
 protected:
     unsigned m_pipeline_depth;
     warp_inst_t **m_pipeline_reg;

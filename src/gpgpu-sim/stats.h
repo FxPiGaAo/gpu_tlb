@@ -36,6 +36,7 @@ enum mem_stage_access_type {
    L_MEM_LD,
    G_MEM_ST,
    L_MEM_ST,
+   TLB_MEM,
    N_MEM_STAGE_ACCESS_TYPE
 };
 enum tlb_request_status {

@@ -247,10 +247,8 @@ void shader_core_config::reg_options(class OptionParser * opp)
                    "per-shader tlb config "
                    " {<nsets>:<bsize>:<assoc>,<rep>:<wr>:<alloc>:<wr_alloc>,<mshr>:<N>:<merge>,<mq>} ",
                    "none" );
-    /*option_parser_register(opp, "-gpgpu_tlb_latency", OPT_TLB_LATENCY, &m_tlb_config.m_config_string,
-                   "tlb latency config "
-                   " {tlb fifo latency} ",
-                   "none" );*/
+    option_parser_register(opp, "-gpgpu_tlb_latency", OPT_INT32, &tlb_miss_latency,
+                   "tlb latency config ","1" );
     ///////////////////////////////////////////////////////////////////////////////////////////////////////
     option_parser_register(opp, "-gpgpu_const_cache:l1", OPT_CSTR, &m_L1C_config.m_config_string, 
                    "per-shader L1 constant memory cache  (READ-ONLY) config "

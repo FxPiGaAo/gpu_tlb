@@ -551,7 +551,7 @@ void shader_core_stats::print( FILE* fout ) const
 
    fprintf(fout, "gpgpu_n_intrawarp_mshr_merge = %d\n", gpgpu_n_intrawarp_mshr_merge);
    fprintf(fout, "gpgpu_n_cmem_portconflict = %d\n", gpgpu_n_cmem_portconflict);
-
+   fprintf(fout, "gpgpu_stall_shd_mem[tlb_mem][tlb_stall] = %d\n", gpu_stall_shd_mem_breakdown[TLB_MEM][TLB_STALL]);
    fprintf(fout, "gpgpu_stall_shd_mem[c_mem][resource_stall] = %d\n", gpu_stall_shd_mem_breakdown[C_MEM][BK_CONF]);
    //fprintf(fout, "gpgpu_stall_shd_mem[c_mem][mshr_rc] = %d\n", gpu_stall_shd_mem_breakdown[C_MEM][MSHR_RC_FAIL]);
    //fprintf(fout, "gpgpu_stall_shd_mem[c_mem][icnt_rc] = %d\n", gpu_stall_shd_mem_breakdown[C_MEM][ICNT_RC_FAIL]);
@@ -1768,7 +1768,7 @@ bool ldst_unit::tlb_cycle( warp_inst_t &inst, mem_stage_stall_type &rc_fail, mem
    }*/
        return true;
    }
-   else{
+   else{ 
        return false;
    }
    //return inst.accessq_empty(); //done if empty.
@@ -2631,14 +2631,17 @@ void ldst_unit::cycle()
 */
 
 ////////////////////////////////////////////////////////////
-   enum mem_stage_stall_type new_rc_fail = NO_RC_FAIL;
+   enum mem_stage_stall_type new_rc_fail = TLB_STALL;
    warp_inst_t &pipe_reg = *m_dispatch_reg;
-   mem_stage_access_type new_type;
+   mem_stage_access_type new_type = TLB_MEM;
    bool tlb_hit = false;
    assert( tlb_remain_latency >= 0);
    if(tlb_remain_latency == 0){
        tlb_hit = tlb_cycle(pipe_reg,new_rc_fail,new_type);
-       if(tlb_hit == false) tlb_remain_latency = 19;
+       if(tlb_hit == false){
+           tlb_remain_latency = 19;
+           m_stats->gpu_stall_shd_mem_breakdown[new_type][new_rc_fail]++;
+       }
    }
    else{
        tlb_remain_latency--;
@@ -2662,7 +2665,7 @@ void ldst_unit::cycle()
      //tlb_temp_type = *type;
      //tlb_temp_inst = m_dispatch_reg;
    }else{
-     printf("F\n");
+     //printf("F\n");
      //move_warp(tlb_temp_inst, m_dispatch_reg);
      //m_dispatch_reg->clear();
      //tlb_temp_inst->clear();

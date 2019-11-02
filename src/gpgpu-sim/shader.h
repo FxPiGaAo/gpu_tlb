@@ -1539,7 +1539,8 @@ struct shader_core_config : public core_config
     bool gpgpu_concurrent_kernel_sm;
 
     bool adpative_volta_cache_config;
-
+public: 
+    int tlb_miss_latency = 1;
 };
 
 struct shader_core_stats_pod {
